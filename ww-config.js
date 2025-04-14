@@ -940,5 +940,18 @@ export default {
             },
             /* wwEditor:end */
         },
+        loading: {
+            label: { en: "Loading" },
+            type: "OnOff",
+            section: "settings",
+            bindable: true,
+            defaultValue: false,
+            /* wwEditor:start */
+            bindingValidation: {
+                type: "boolean",
+                tooltip: "Show skeleton loading state",
+            },
+            /* wwEditor:end */
+        },
     },
 };

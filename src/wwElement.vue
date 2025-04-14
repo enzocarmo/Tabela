@@ -25,6 +25,7 @@ import ActionCellRenderer from "./components/ActionCellRenderer.vue";
 import ImageCellRenderer from "./components/ImageCellRenderer.vue";
 import WewebCellRenderer from "./components/WewebCellRenderer.vue";
 import ComparativeCellRenderer from "./components/ComparativeCellRenderer.vue";
+import SkeletonCellRenderer from "./components/SkeletonCellRenderer.vue";
 
 // TODO: maybe register less modules
 // TODO: maybe register modules per grid instead of globally
@@ -37,6 +38,7 @@ export default {
     ImageCellRenderer,
     WewebCellRenderer,
     ComparativeCellRenderer,
+    SkeletonCellRenderer
   },
   props: {
     content: {
@@ -104,6 +106,21 @@ export default {
       return Array.isArray(data) ? data ?? [] : [];
     },
     computedRowData() {
+      if (this.content.loading) {
+        // Generate 12 skeleton rows
+        const skeletonRows = Array(12).fill().map((_, index) => {
+          const row = { _isSkeletonRow: true };
+          // Add a field for each column
+          this.content.columns.forEach(column => {
+            if (column.field) {
+              row[column.field] = null;
+            }
+          });
+          return row;
+        });
+        return skeletonRows;
+      }
+
       // We just return the original data since we'll use pinnedBottomRowData for the total row
       return this.rowData;
     },
@@ -150,6 +167,16 @@ export default {
           width,
           flex,
         };
+        if (this.content.loading) {
+          return {
+            ...commonProperties,
+            headerName: col.headerName,
+            field: col.field,
+            cellRenderer: "SkeletonCellRenderer",
+            sortable: false,
+            filter: false,
+          };
+        }
         switch (col.cellDataType) {
           case "action": {
             return {
@@ -456,5 +483,48 @@ export default {
 
 .ag-cell {
   font-weight: 600;
+}
+
+.skeleton-cell-container {
+  display: flex;
+  align-items: center;
+  /* Centraliza verticalmente */
+  height: 100%;
+  /* Ocupa toda a altura da célula */
+  width: 100%;
+  /* Ocupa toda a largura da célula */
+  padding: 8px 0;
+  /* Espaçamento opcional para melhor aparência */
+}
+
+.skeleton-loader {
+  height: 14px;
+  background-color: #A19B9D4D;
+  border-radius: 2px;
+  width: 100%;
+  animation: skeleton-wave 1.5s ease-in-out infinite;
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes skeleton-wave {
+  0% {
+    background-position: -200px 0;
+  }
+
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.skeleton-loader::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: skeleton-wave 1.5s ease-in-out 0.5s infinite;
 }
 </style>
