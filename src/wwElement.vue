@@ -107,10 +107,13 @@ export default {
     },
     computedRowData() {
       if (this.content.loading) {
-        // Generate 12 skeleton rows
-        const skeletonRows = Array(12).fill().map((_, index) => {
-          const row = { _isSkeletonRow: true };
-          // Add a field for each column
+        // Gerar 15 linhas de skeleton
+        const skeletonRows = Array(15).fill().map((_, index) => {
+          const row = {
+            _isSkeletonRow: true,
+            _skeletonId: `skeleton-${index}` // Propriedade para uso no idFormula caso necessário
+          };
+          // Adicionar um campo para cada coluna
           this.content.columns.forEach(column => {
             if (column.field) {
               row[column.field] = null;
@@ -121,7 +124,7 @@ export default {
         return skeletonRows;
       }
 
-      // We just return the original data since we'll use pinnedBottomRowData for the total row
+      // Retornar os dados originais quando não estiver carregando
       return this.rowData;
     },
     totalRowData() {
@@ -342,6 +345,9 @@ export default {
   },
   methods: {
     getRowId(params) {
+      if (params.data?._isSkeletonRow) {
+        return params.data._skeletonId;
+      }
       return this.resolveMappingFormula(this.content.idFormula, params.data);
     },
     onActionTrigger(event) {
