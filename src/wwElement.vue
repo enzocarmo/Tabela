@@ -6,7 +6,8 @@
       :paginationPageSize="content.paginationPageSize || 10" :paginationPageSizeSelector="false"
       :suppressMovableColumns="!content.movableColumns" :columnHoverHighlight="content.columnHoverHighlight"
       :pinnedBottomRowData="totalRowData" :localeText="AG_GRID_LOCALE_BR" @grid-ready="onGridReady"
-      @row-selected="onRowSelected" @selection-changed="onSelectionChanged" @cell-value-changed="onCellValueChanged">
+      @row-selected="onRowSelected" @selection-changed="onSelectionChanged" @cell-value-changed="onCellValueChanged"
+      @row-double-clicked="onRowDoubleClicked">
     </ag-grid-vue>
   </div>
 </template>
@@ -329,6 +330,15 @@ export default {
           oldValue: event.oldValue,
           newValue: event.newValue,
           columnId: event.column.getColId(),
+          row: event.data,
+        },
+      });
+    },
+    // Novo método para tratar o double click na linha
+    onRowDoubleClicked(event) {
+      this.$emit("trigger-event", {
+        name: "rowdoubleclicked",
+        event: {
           row: event.data,
         },
       });
