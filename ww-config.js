@@ -85,6 +85,13 @@ export default {
             getTestEvent: "getSelectionTestEvent",
         }
     ],
+    actions: [
+        {
+            label: 'Size Columns To Fit',
+            action: 'sizeColumnsToFit',
+            args: [],
+        },
+    ],
     properties: {
         headerTitle: {
             type: "Title",
