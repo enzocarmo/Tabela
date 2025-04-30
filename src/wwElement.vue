@@ -387,6 +387,36 @@ export default {
         },
       });
     },
+    // Método para ajustar automaticamente o tamanho de todas as colunas com base no conteúdo
+  sizeColumnsToFit() {
+    const api = this.gridApi?.value || this.gridApi;
+    
+    if (api) {
+      // Obtém todos os IDs de coluna
+      const allColumnIds = api.getColumns().map(column => column.getColId());
+      
+      // Aplica o autoSize em todas as colunas
+      api.autoSizeColumns(allColumnIds);
+      
+      // Opcionalmente, se alguma coluna ficar muito grande, você pode limitar seu tamanho máximo
+      // Isso não é obrigatório, mas pode melhorar a experiência do usuário
+      const columnState = api.getColumnState();
+      
+      this.content.columns.forEach((colDef) => {
+        const colId = colDef.field;
+        const column = columnState.find(c => c.colId === colId);
+        
+        // Se a coluna tiver um maxWidth definido e estiver acima disso após o autoSize
+        if (column && colDef.maxWidth && colDef.maxWidth !== 'auto') {
+          const maxWidth = wwLib.wwUtils.getLengthUnit(colDef.maxWidth)?.[0];
+          if (maxWidth && column.width > maxWidth) {
+            // Limita a largura da coluna ao máximo definido
+            api.setColumnWidth(colId, maxWidth);
+          }
+        }
+      });
+    }
+  },
     /* wwEditor:start */
     generateColumns() {
       this.$emit("update:content", {
