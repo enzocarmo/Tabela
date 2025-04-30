@@ -367,6 +367,17 @@ export default {
         },
       });
     },
+    formatNumber(value) {
+      // Garante que o valor é um número
+      const num = Number(value);
+      if (isNaN(num)) return value;
+
+      // Formata o número com pontos para milhares e vírgula para decimais
+      return num.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    },
     // Novo método para tratar o double click na linha
     onRowDoubleClicked(event) {
       this.$emit("trigger-event", {
@@ -415,17 +426,6 @@ export default {
       return {
         row: data[0],
       };
-    },
-    formatNumber(value) {
-      // Garante que o valor é um número
-      const num = Number(value);
-      if (isNaN(num)) return value;
-
-      // Formata o número com pontos para milhares e vírgula para decimais
-      return num.toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      });
     },
     /* wwEditor:end */
   },
