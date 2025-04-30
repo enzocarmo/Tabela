@@ -67,9 +67,61 @@ export default {
         readonly: true,
       });
 
+    const { value: dataTable, setValue: setDataTable } =
+    wwLib.wwVariable.useComponentVariable({
+    uid: props.uid,
+    name: "dataTable",
+    type: "array",
+    defaultValue: [],
+    readonly: true,
+  });
+
     const onGridReady = (params) => {
-      gridApi.value = params.api;
-    };
+  gridApi.value = params.api;
+  
+  // Adicionar listeners para vários eventos que podem mudar os dados exibidos
+  gridApi.value.addEventListener('sortChanged', updateDisplayedData);
+  gridApi.value.addEventListener('filterChanged', updateDisplayedData);
+  gridApi.value.addEventListener('paginationChanged', updateDisplayedData);
+  
+  // Atualizar os dados inicialmente
+  updateDisplayedData();
+};
+
+    // Adicione esta nova função para atualizar os dados exibidos
+const updateDisplayedData = () => {
+  if (!gridApi.value) return;
+  
+  let displayedData = [];
+  
+  if (props.content.pagination) {
+    // Se tiver paginação, pegamos apenas os dados da página atual
+    const currentPage = gridApi.value.paginationGetCurrentPage();
+    const pageSize = props.content.paginationPageSize || 10;
+    const startRow = currentPage * pageSize;
+    const endRow = startRow + pageSize;
+    
+    let rowIndex = 0;
+    gridApi.value.forEachNodeAfterFilterAndSort((node) => {
+      if (rowIndex >= startRow && rowIndex < endRow) {
+        displayedData.push(node.data);
+      }
+      rowIndex++;
+    });
+  } else {
+    // Se não tiver paginação, pegamos todos os dados filtrados e ordenados
+    gridApi.value.forEachNodeAfterFilterAndSort((node) => {
+      displayedData.push(node.data);
+    });
+  }
+  
+  // Removemos linhas de skeleton
+  displayedData = displayedData.filter(row => !row?._isSkeletonRow);
+  
+  // Atualizamos a variável
+  setDataTable(displayedData);
+};
+    
     const onRowSelected = (event) => {
       const name = event.node.isSelected() ? "rowSelected" : "rowDeselected";
       ctx.emit("trigger-event", {
@@ -95,6 +147,8 @@ export default {
       onSelectionChanged,
       gridApi,
       AG_GRID_LOCALE_BR,
+      setDataTable,        // Adicionando setDataTable
+      updateDisplayedData, // Adicionando updateDisplayedData
       /* wwEditor:start */
       createElement,
       /* wwEditor:end */
@@ -387,6 +441,36 @@ export default {
         },
       });
     },
+    updateDisplayedData() {
+    if (!this.gridApi?.value) return;
+    
+    let displayedData = [];
+    
+    if (this.content.pagination) {
+      const currentPage = this.gridApi.value.paginationGetCurrentPage();
+      const pageSize = this.content.paginationPageSize || 10;
+      const startRow = currentPage * pageSize;
+      const endRow = startRow + pageSize;
+      
+      let rowIndex = 0;
+      this.gridApi.value.forEachNodeAfterFilterAndSort((node) => {
+        if (rowIndex >= startRow && rowIndex < endRow) {
+          displayedData.push(node.data);
+        }
+        rowIndex++;
+      });
+    } else {
+      this.gridApi.value.forEachNodeAfterFilterAndSort((node) => {
+        displayedData.push(node.data);
+      });
+    }
+    
+    // Removemos linhas de skeleton
+    displayedData = displayedData.filter(row => !row?._isSkeletonRow);
+    
+    // Atualizamos a variável
+    this.setDataTable(displayedData);
+  },
     // Método para ajustar automaticamente o tamanho de todas as colunas com base no conteúdo
   sizeColumnsToFit() {
     const api = this.gridApi?.value || this.gridApi;
@@ -479,6 +563,16 @@ export default {
       },
       deep: true,
     },
+    computedRowData: {
+    handler() {
+      this.$nextTick(() => {
+        if (this.gridApi?.value) {
+          this.updateDisplayedData();
+        }
+      });
+    },
+    deep: true
+  },
   },
   /* wwEditor:end */
 };
