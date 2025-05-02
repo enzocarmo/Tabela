@@ -203,7 +203,14 @@ const updateDisplayedData = () => {
       };
     },
     columnDefs() {
-      return this.content.columns.map((col) => {
+      return this.content.columns
+    .filter(col => {
+      // Se display for undefined ou true, mostra a coluna
+      // Se for false, não mostra
+      const display = this.resolveMappingFormula(col.display, null);
+      return display === undefined || display === null || display === true;
+    })
+    .map((col) => {
         const minWidth =
           !col.minWidth || col.minWidth === "auto"
             ? null
