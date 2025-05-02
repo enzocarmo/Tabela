@@ -84,6 +84,8 @@ export default {
   gridApi.value.addEventListener('filterChanged', updateDisplayedData);
   gridApi.value.addEventListener('paginationChanged', updateDisplayedData);
 
+  updateColumnsVisibility();
+      
   // Atualizar os dados inicialmente
   updateDisplayedData();
 };
@@ -224,6 +226,7 @@ const updateDisplayedData = () => {
           pinned: col.pinned === "none" ? false : col.pinned,
           width,
           flex,
+          hide: col.display === false, 
         };
         if (this.content.loading) {
           return {
@@ -422,6 +425,23 @@ const updateDisplayedData = () => {
         },
       });
     },
+    updateColumnsVisibility() {
+  if (!this.gridApi?.value) return;
+  
+  // Para cada coluna na configuração
+  this.content.columns.forEach(column => {
+    const columnState = {
+      colId: column.field,
+      hide: column.display === false
+    };
+    
+    // Atualiza o estado da coluna
+    this.gridApi.value.columnModel.setColumnState([columnState]);
+  });
+  
+  // Após atualizar a visibilidade, também atualizamos os dados exibidos
+  this.updateDisplayedData();
+},
     formatNumber(value) {
       // Garante que o valor é um número
       const num = Number(value);
@@ -574,6 +594,23 @@ const updateDisplayedData = () => {
     },
     deep: true
   },
+    'content.columns': {
+  handler(newColumns, oldColumns) {
+    // Verificamos se houve mudança nas propriedades de display
+    const displayChanged = newColumns.some((newCol, index) => {
+      const oldCol = oldColumns[index];
+      return oldCol && newCol.display !== oldCol.display;
+    });
+    
+    // Se mudou a visibilidade de alguma coluna, atualizamos
+    if (displayChanged && this.gridApi?.value) {
+      this.$nextTick(() => {
+        this.updateColumnsVisibility();
+      });
+    }
+  },
+  deep: true
+},
   },
   /* wwEditor:end */
 };
