@@ -83,6 +83,10 @@ export default {
   gridApi.value.addEventListener('sortChanged', updateDisplayedData);
   gridApi.value.addEventListener('filterChanged', updateDisplayedData);
   gridApi.value.addEventListener('paginationChanged', updateDisplayedData);
+  gridApi.value.addEventListener('columnVisible', this.updateDisplayedData); // Novo evento
+  
+  // Garanta que as colunas corretas estão definidas inicialmente
+  gridApi.value.setColumnDefs(this.columnDefs);
   
   // Atualizar os dados inicialmente
   updateDisplayedData();
@@ -203,10 +207,8 @@ const updateDisplayedData = () => {
       };
     },
     columnDefs() {
-      return this.content.columns
+    return this.content.columns
     .filter(col => {
-      // Se display for undefined ou true, mostra a coluna
-      // Se for false, não mostra
       const display = this.resolveMappingFormula(col.display, null);
       return display === undefined || display === null || display === true;
     })
@@ -579,6 +581,17 @@ const updateDisplayedData = () => {
       });
     },
     deep: true
+  },
+    'content.columns': {
+    deep: true,
+    handler() {
+      this.$nextTick(() => {
+        if (this.gridApi?.value) {
+          this.gridApi.value.setColumnDefs(this.columnDefs);
+          this.updateDisplayedData();
+        }
+      });
+    }
   },
   },
   /* wwEditor:end */
