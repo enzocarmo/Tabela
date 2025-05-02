@@ -652,6 +652,18 @@ export default {
                                 type: "Text",
                                 bindable: true,
                             },
+                            display: {
+    label: "Visível",
+    type: "OnOff",
+    bindable: true,
+    defaultValue: true, // Por padrão a coluna será visível
+    /* wwEditor:start */
+    bindingValidation: {
+        type: "boolean",
+        tooltip: "Define se a coluna será exibida ou não"
+    },
+    /* wwEditor:end */
+},
                             cellDataType: {
                                 label: "Type",
                                 type: "TextSelect",
