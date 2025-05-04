@@ -205,130 +205,175 @@ const updateDisplayedData = () => {
       };
     },
     columnDefs() {
-    return this.content.columns
+  // Primeiro, processamos as colunas com suas configurações
+  const processedColumns = this.content.columns
     .map((col) => {
-        const minWidth =
-          !col.minWidth || col.minWidth === "auto"
-            ? null
-            : wwLib.wwUtils.getLengthUnit(col.minWidth)?.[0];
-        const maxWidth =
-          !col.maxWidth || col.maxWidth === "auto"
-            ? null
-            : wwLib.wwUtils.getLengthUnit(col.maxWidth)?.[0];
-        const width =
-          !col.width || col.width === "auto" || col.widthAlgo === "flex"
-            ? null
-            : wwLib.wwUtils.getLengthUnit(col.width)?.[0];
-        const flex = col.widthAlgo === "flex" ? col.flex ?? 1 : null;
-        const commonProperties = {
-          minWidth,
-          maxWidth,
-          pinned: col.pinned === "none" ? false : col.pinned,
-          width,
-          flex,
-          hide: col.display === false, 
+      const minWidth =
+        !col.minWidth || col.minWidth === "auto"
+          ? null
+          : wwLib.wwUtils.getLengthUnit(col.minWidth)?.[0];
+      const maxWidth =
+        !col.maxWidth || col.maxWidth === "auto"
+          ? null
+          : wwLib.wwUtils.getLengthUnit(col.maxWidth)?.[0];
+      const width =
+        !col.width || col.width === "auto" || col.widthAlgo === "flex"
+          ? null
+          : wwLib.wwUtils.getLengthUnit(col.width)?.[0];
+      const flex = col.widthAlgo === "flex" ? col.flex ?? 1 : null;
+      const commonProperties = {
+        minWidth,
+        maxWidth,
+        pinned: col.pinned === "none" ? false : col.pinned,
+        width,
+        flex,
+        hide: col.display === false, 
+      };
+      
+      if (this.content.loading) {
+        return {
+          ...commonProperties,
+          headerName: col.headerName,
+          field: col.field,
+          cellRenderer: "SkeletonCellRenderer",
+          sortable: false,
+          filter: false,
+          parentColumn: col.parentColumn // Guardamos a informação do parent
         };
-        if (this.content.loading) {
+      }
+      
+      switch (col.cellDataType) {
+        case "action": {
+          return {
+            ...commonProperties,
+            headerName: col.headerName,
+            cellRenderer: "ActionCellRenderer",
+            cellRendererParams: {
+              name: col.actionName,
+              label: col.actionLabel,
+              trigger: this.onActionTrigger,
+              withFont: !!this.content.actionFont,
+            },
+            sortable: false,
+            filter: false,
+            parentColumn: col.parentColumn, // Guardamos a informação do parent
+          };
+        }
+        case "custom":
           return {
             ...commonProperties,
             headerName: col.headerName,
             field: col.field,
-            cellRenderer: "SkeletonCellRenderer",
-            sortable: false,
-            filter: false,
+            cellRenderer: "WewebCellRenderer",
+            cellRendererParams: {
+              containerId: col.containerId,
+            },
+            sortable: col.sortable,
+            filter: col.filter,
+            parentColumn: col.parentColumn, // Guardamos a informação do parent
+          };
+        case "image": {
+          return {
+            ...commonProperties,
+            headerName: col.headerName,
+            field: col.field,
+            cellRenderer: "ImageCellRenderer",
+            cellRendererParams: {
+              width: col.imageWidth,
+              height: col.imageHeight,
+            },
+            parentColumn: col.parentColumn, // Guardamos a informação do parent
           };
         }
-        switch (col.cellDataType) {
-          case "action": {
-            return {
-              ...commonProperties,
-              headerName: col.headerName,
-              cellRenderer: "ActionCellRenderer",
-              cellRendererParams: {
-                name: col.actionName,
-                label: col.actionLabel,
-                trigger: this.onActionTrigger,
-                withFont: !!this.content.actionFont,
-              },
-              sortable: false,
-              filter: false,
+        // No caso default
+        default: {
+          const result = {
+            ...commonProperties,
+            headerName: col.headerName,
+            field: col.field,
+            sortable: col.sortable,
+            filter: col.filter,
+            editable: col.editable,
+            parentColumn: col.parentColumn, // Guardamos a informação do parent
+          };
+
+          if (col.comparative) {
+            result.cellRenderer = "ComparativeCellRenderer";
+          }
+
+          // Lógica para formatação de números
+          if (col.cellDataType === "formatted-number") {
+            result.valueFormatter = (params) => {
+              if (params.value === null || params.value === undefined) return '';
+              return this.formatNumber(params.value);
             };
           }
-          case "custom":
-            return {
-              ...commonProperties,
-              headerName: col.headerName,
-              field: col.field,
-              cellRenderer: "WewebCellRenderer",
-              cellRendererParams: {
-                containerId: col.containerId,
-              },
-              sortable: col.sortable,
-              filter: col.filter,
-            };
-          case "image": {
-            return {
-              ...commonProperties,
-              headerName: col.headerName,
-              field: col.field,
-              cellRenderer: "ImageCellRenderer",
-              cellRendererParams: {
-                width: col.imageWidth,
-                height: col.imageHeight,
-              },
+          // Lógica para formatação de moeda (R$)
+          else if (col.cellDataType === "currency") {
+            result.valueFormatter = (params) => {
+              if (params.value === null || params.value === undefined) return '';
+              return `R$ ${this.formatNumber(params.value)}`;
             };
           }
-          // No caso default
-          default: {
-            const result = {
-              ...commonProperties,
-              headerName: col.headerName,
-              field: col.field,
-              sortable: col.sortable,
-              filter: col.filter,
-              editable: col.editable,
+          // Lógica para formatação de porcentagem (%)
+          else if (col.cellDataType === "percentage") {
+            result.valueFormatter = (params) => {
+              if (params.value === null || params.value === undefined) return '';
+              return `${this.formatNumber(params.value)}%`;
             };
-
-            if (col.comparative) {
-              result.cellRenderer = "ComparativeCellRenderer";
-            }
-
-            // Lógica para formatação de números
-            if (col.cellDataType === "formatted-number") {
-              result.valueFormatter = (params) => {
-                if (params.value === null || params.value === undefined) return '';
-                return this.formatNumber(params.value);
-              };
-            }
-            // Lógica para formatação de moeda (R$)
-            else if (col.cellDataType === "currency") {
-              result.valueFormatter = (params) => {
-                if (params.value === null || params.value === undefined) return '';
-                return `R$ ${this.formatNumber(params.value)}`;
-              };
-            }
-            // Lógica para formatação de porcentagem (%)
-            else if (col.cellDataType === "percentage") {
-              result.valueFormatter = (params) => {
-                if (params.value === null || params.value === undefined) return '';
-                return `${this.formatNumber(params.value)}%`;
-              };
-            }
-            // Lógica existente para customização de label
-            else if (col.useCustomLabel) {
-              result.valueFormatter = (params) => {
-                return this.resolveMappingFormula(
-                  col.displayLabelFormula,
-                  params.value
-                );
-              };
-            }
-
-            return result;
           }
+          // Lógica existente para customização de label
+          else if (col.useCustomLabel) {
+            result.valueFormatter = (params) => {
+              return this.resolveMappingFormula(
+                col.displayLabelFormula,
+                params.value
+              );
+            };
+          }
+
+          return result;
         }
-      });
-    },
+      }
+    });
+
+  // Agora organizamos as colunas em grupos
+  if (this.content.parentColumns && this.content.parentColumns.length > 0) {
+    const columnGroups = [];
+    const unGroupedColumns = [];
+    
+    // Criamos um mapa de colunas agrupadas
+    const groupedColumnsMap = new Map();
+    
+    // Agrupamos as colunas
+    processedColumns.forEach(col => {
+      if (col.parentColumn) {
+        if (!groupedColumnsMap.has(col.parentColumn)) {
+          groupedColumnsMap.set(col.parentColumn, []);
+        }
+        groupedColumnsMap.get(col.parentColumn).push(col);
+      } else {
+        unGroupedColumns.push(col);
+      }
+    });
+    
+    // Criamos as colunas agrupadas baseadas na ordem dos parentColumns
+    this.content.parentColumns.forEach(parent => {
+      if (groupedColumnsMap.has(parent.label)) {
+        columnGroups.push({
+          headerName: parent.label,
+          children: groupedColumnsMap.get(parent.label)
+        });
+      }
+    });
+    
+    // Retornamos todas as colunas: agrupadas e não agrupadas
+    return [...columnGroups, ...unGroupedColumns];
+  }
+  
+  // Se não há parent columns, retornamos as colunas normalmente
+  return processedColumns;
+},
     rowSelection() {
       if (this.content.rowSelection === "multiple") {
         return { mode: "multiRow", checkboxes: true };
