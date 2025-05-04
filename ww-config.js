@@ -637,6 +637,33 @@ export default {
             section: "settings",
             editorOnly: true,
         },
+        parentColumns: {
+            label: { en: "Parent Columns" },
+            type: "Array",
+            options: {
+                item: {
+                    type: "Object",
+                    options: {
+                        item: {
+                            label: {
+                                label: "Label",
+                                type: "Text",
+                                bindable: true,
+                            },
+                        },
+                    },
+                },
+                defaultValue: {},
+                movable: true,
+                expandable: true,
+                getItemLabel(item, index) {
+                    return item?.label?.length ? item?.label : `Parent Column ${index + 1}`;
+                },
+            },
+            defaultValue: [],
+            section: "settings",
+            bindable: true,
+        },
         columns: {
             label: {
                 en: "Columns",
@@ -651,6 +678,20 @@ export default {
                                 label: "Header Name",
                                 type: "Text",
                                 bindable: true,
+                            },
+                            parentColumn: {
+                                label: "Parent Column",
+                                type: "TextSelect",
+                                bindable: true,
+                                options: {
+                                    options: [
+                                        { value: null, label: "None", default: true },
+                                        ...(content.parentColumns || []).map(parent => ({
+                                            value: parent.label,
+                                            label: parent.label
+                                        }))
+                                    ],
+                                },
                             },
                             display: {
     label: "Visível",
