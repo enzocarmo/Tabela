@@ -184,20 +184,30 @@ const updateDisplayedData = () => {
       return this.rowData;
     },
     totalRowData() {
-      if (!this.content.showTotalRow) return null;
+  if (!this.content.showTotalRow) return null;
 
-      // Create an empty object for the total row
-      const totalRow = {};
+  // Create an empty object for the total row
+  const totalRow = {};
 
-      // Add the totals from each column's totalValue field
-      this.content.columns.forEach(column => {
-        if (column.totalValue) {
-          totalRow[column.field] = this.resolveMappingFormula(column.totalValue, null);
-        }
-      });
+  // Add the totals from each column's totalValue field
+  this.content.columns.forEach(column => {
+    // Verifica se a coluna tem totalValue definido
+    if (column.totalValue) {
+      // Verifica se as colunas são bindable (dinâmicas)
+      if (this.wwEditorState?.boundProps?.columns) {
+        // Se for bindable, tenta usar a propriedade 'total' do objeto
+        // Assume que totalValue é um objeto com a propriedade 'total'
+        totalRow[column.field] = column.totalValue?.total || 
+                               this.resolveMappingFormula(column.totalValue, null);
+      } else {
+        // Se não for bindable, usa a fórmula como antes
+        totalRow[column.field] = this.resolveMappingFormula(column.totalValue, null);
+      }
+    }
+  });
 
-      return [totalRow];
-    },
+  return [totalRow];
+},
     defaultColDef() {
       return {
         editable: false,
