@@ -238,6 +238,9 @@ const updateDisplayedData = () => {
         width,
         flex,
         hide: col.display === false, 
+        context: {
+          parentColumn: col.parentColumn
+        }
       };
       
       if (this.content.loading) {
@@ -247,8 +250,7 @@ const updateDisplayedData = () => {
           field: col.field,
           cellRenderer: "SkeletonCellRenderer",
           sortable: false,
-          filter: false,
-          parentColumn: col.parentColumn // Guardamos a informação do parent
+          filter: false
         };
       }
       
@@ -265,8 +267,7 @@ const updateDisplayedData = () => {
               withFont: !!this.content.actionFont,
             },
             sortable: false,
-            filter: false,
-            parentColumn: col.parentColumn, // Guardamos a informação do parent
+            filter: false
           };
         }
         case "custom":
@@ -279,8 +280,7 @@ const updateDisplayedData = () => {
               containerId: col.containerId,
             },
             sortable: col.sortable,
-            filter: col.filter,
-            parentColumn: col.parentColumn, // Guardamos a informação do parent
+            filter: col.filter
           };
         case "image": {
           return {
@@ -291,8 +291,7 @@ const updateDisplayedData = () => {
             cellRendererParams: {
               width: col.imageWidth,
               height: col.imageHeight,
-            },
-            parentColumn: col.parentColumn, // Guardamos a informação do parent
+            }
           };
         }
         // No caso default
@@ -303,8 +302,7 @@ const updateDisplayedData = () => {
             field: col.field,
             sortable: col.sortable,
             filter: col.filter,
-            editable: col.editable,
-            parentColumn: col.parentColumn, // Guardamos a informação do parent
+            editable: col.editable
           };
 
           if (col.comparative) {
@@ -357,11 +355,12 @@ const updateDisplayedData = () => {
     
     // Agrupamos as colunas
     processedColumns.forEach(col => {
-      if (col.parentColumn) {
-        if (!groupedColumnsMap.has(col.parentColumn)) {
-          groupedColumnsMap.set(col.parentColumn, []);
+      const parentColumn = col.context?.parentColumn;
+      if (parentColumn) {
+        if (!groupedColumnsMap.has(parentColumn)) {
+          groupedColumnsMap.set(parentColumn, []);
         }
-        groupedColumnsMap.get(col.parentColumn).push(col);
+        groupedColumnsMap.get(parentColumn).push(col);
       } else {
         unGroupedColumns.push(col);
       }
