@@ -216,192 +216,170 @@ const updateDisplayedData = () => {
       };
     },
     columnDefs() {
-  // Primeiro, processamos as colunas com suas configurações
-  const processedColumns = this.content.columns
-    .map((col) => {
-      const minWidth =
-        !col.minWidth || col.minWidth === "auto"
-          ? null
-          : wwLib.wwUtils.getLengthUnit(col.minWidth)?.[0];
-      const maxWidth =
-        !col.maxWidth || col.maxWidth === "auto"
-          ? null
-          : wwLib.wwUtils.getLengthUnit(col.maxWidth)?.[0];
-      const width =
-        !col.width || col.width === "auto" || col.widthAlgo === "flex"
-          ? null
-          : wwLib.wwUtils.getLengthUnit(col.width)?.[0];
-      const flex = col.widthAlgo === "flex" ? col.flex ?? 1 : null;
-      const commonProperties = {
-        minWidth,
-        maxWidth,
-        pinned: col.pinned === "none" ? false : col.pinned,
-        width,
-        flex,
-        hide: col.display === false, 
-        __parentColumn: col.parentColumn
+  // Primeiro, processamos as colunas com suas configurações básicas
+  const processedColumns = this.content.columns.map((col) => {
+    const minWidth = !col.minWidth || col.minWidth === "auto" 
+      ? null 
+      : wwLib.wwUtils.getLengthUnit(col.minWidth)?.[0];
+    const maxWidth = !col.maxWidth || col.maxWidth === "auto" 
+      ? null 
+      : wwLib.wwUtils.getLengthUnit(col.maxWidth)?.[0];
+    const width = !col.width || col.width === "auto" || col.widthAlgo === "flex" 
+      ? null 
+      : wwLib.wwUtils.getLengthUnit(col.width)?.[0];
+    const flex = col.widthAlgo === "flex" ? col.flex ?? 1 : null;
+    
+    // Propriedades básicas da coluna
+    const columnDef = {
+      field: col.field,
+      headerName: col.headerName,
+      minWidth,
+      maxWidth,
+      width,
+      flex,
+      pinned: col.pinned === "none" ? false : col.pinned,
+      hide: col.display === false,
+      sortable: !!col.sortable,
+      filter: !!col.filter,
+      editable: !!col.editable,
+      // Usamos o objeto context para armazenar metadados adicionais
+      context: {
+        parentColumn: col.parentColumn
+      }
+    };
+    
+    // Se estiver em modo de carregamento, simplifica para o renderer de skeleton
+    if (this.content.loading) {
+      return {
+        ...columnDef,
+        cellRenderer: "SkeletonCellRenderer",
+        sortable: false,
+        filter: false
       };
-      
-      if (this.content.loading) {
+    }
+    
+    // Processamento específico por tipo de célula
+    switch (col.cellDataType) {
+      case "action": {
         return {
-          ...commonProperties,
-          headerName: col.headerName,
-          field: col.field,
-          cellRenderer: "SkeletonCellRenderer",
+          ...columnDef,
+          cellRenderer: "ActionCellRenderer",
+          cellRendererParams: {
+            name: col.actionName,
+            label: col.actionLabel,
+            trigger: this.onActionTrigger,
+            withFont: !!this.content.actionFont,
+          },
           sortable: false,
           filter: false
         };
       }
-      
-      switch (col.cellDataType) {
-        case "action": {
-          return {
-            ...commonProperties,
-            headerName: col.headerName,
-            cellRenderer: "ActionCellRenderer",
-            cellRendererParams: {
-              name: col.actionName,
-              label: col.actionLabel,
-              trigger: this.onActionTrigger,
-              withFont: !!this.content.actionFont,
-            },
-            sortable: false,
-            filter: false
-          };
-        }
-        case "custom":
-          return {
-            ...commonProperties,
-            headerName: col.headerName,
-            field: col.field,
-            cellRenderer: "WewebCellRenderer",
-            cellRendererParams: {
-              containerId: col.containerId,
-            },
-            sortable: col.sortable !== undefined ? col.sortable : true,
-            filter: col.filter !== undefined ? col.filter : true
-          };
-        case "image": {
-          return {
-            ...commonProperties,
-            headerName: col.headerName,
-            field: col.field,
-            cellRenderer: "ImageCellRenderer",
-            cellRendererParams: {
-              width: col.imageWidth,
-              height: col.imageHeight,
-            },
-            sortable: col.sortable !== undefined ? col.sortable : true,
-            filter: col.filter !== undefined ? col.filter : true
-          };
-        }
-        // No caso default
-        default: {
-          const result = {
-            ...commonProperties,
-            headerName: col.headerName,
-            field: col.field,
-            sortable: col.sortable !== undefined ? col.sortable : true,
-            filter: col.filter !== undefined ? col.filter : true,
-            editable: col.editable !== undefined ? col.editable : false
-          };
-
-          if (col.comparative) {
-            result.cellRenderer = "ComparativeCellRenderer";
+      case "custom": {
+        return {
+          ...columnDef,
+          cellRenderer: "WewebCellRenderer",
+          cellRendererParams: {
+            containerId: col.containerId,
           }
-
-          // Lógica para formatação de números
-          if (col.cellDataType === "formatted-number") {
-            result.valueFormatter = (params) => {
-              if (params.value === null || params.value === undefined) return '';
-              return this.formatNumber(params.value);
-            };
-          }
-          // Lógica para formatação de moeda (R$)
-          else if (col.cellDataType === "currency") {
-            result.valueFormatter = (params) => {
-              if (params.value === null || params.value === undefined) return '';
-              return `R$ ${this.formatNumber(params.value)}`;
-            };
-          }
-          // Lógica para formatação de porcentagem (%)
-          else if (col.cellDataType === "percentage") {
-            result.valueFormatter = (params) => {
-              if (params.value === null || params.value === undefined) return '';
-              return `${this.formatNumber(params.value)}%`;
-            };
-          }
-          // Lógica existente para customização de label
-          else if (col.useCustomLabel) {
-            result.valueFormatter = (params) => {
-              return this.resolveMappingFormula(
-                col.displayLabelFormula,
-                params.value
-              );
-            };
-          }
-
-          return result;
-        }
+        };
       }
-    });
-
-  // Agora organizamos as colunas em grupos
+      case "image": {
+        return {
+          ...columnDef,
+          cellRenderer: "ImageCellRenderer",
+          cellRendererParams: {
+            width: col.imageWidth,
+            height: col.imageHeight,
+          }
+        };
+      }
+      // Tipos de células com formatadores
+      case "formatted-number": {
+        return {
+          ...columnDef,
+          valueFormatter: (params) => {
+            if (params.value === null || params.value === undefined) return '';
+            return this.formatNumber(params.value);
+          }
+        };
+      }
+      case "currency": {
+        return {
+          ...columnDef,
+          valueFormatter: (params) => {
+            if (params.value === null || params.value === undefined) return '';
+            return `R$ ${this.formatNumber(params.value)}`;
+          }
+        };
+      }
+      case "percentage": {
+        return {
+          ...columnDef,
+          valueFormatter: (params) => {
+            if (params.value === null || params.value === undefined) return '';
+            return `${this.formatNumber(params.value)}%`;
+          }
+        };
+      }
+      default: {
+        // Configurações para outros tipos de células
+        if (col.comparative) {
+          columnDef.cellRenderer = "ComparativeCellRenderer";
+        }
+        
+        if (col.useCustomLabel) {
+          columnDef.valueFormatter = (params) => {
+            return this.resolveMappingFormula(
+              col.displayLabelFormula,
+              params.value
+            );
+          };
+        }
+        
+        return columnDef;
+      }
+    }
+  });
+  
+  // Agora organizamos as colunas em grupos se existirem parentColumns
   if (this.content.parentColumns && this.content.parentColumns.length > 0) {
     // Filtra para separar colunas com e sem pais
-    const columnsWithParent = processedColumns.filter(col => col._parentColumn);
-    const columnsWithoutParent = processedColumns.filter(col => !col._parentColumn);
-    
-    // Cria um mapa para agrupar colunas por parentColumn
-    const columnGroups = [];
-    const parentMap = new Map();
+    const columnsWithoutParent = [];
+    const columnsByParent = new Map();
     
     // Agrupa as colunas por parentColumn
-    columnsWithParent.forEach(col => {
-      // Remove o atributo _parentColumn para não interferir no AG Grid
-      const parentName = col._parentColumn;
-      delete col._parentColumn;
+    for (const col of processedColumns) {
+      const parentColumn = col.context?.parentColumn;
       
-      if (!parentMap.has(parentName)) {
-        parentMap.set(parentName, []);
+      if (!parentColumn) {
+        columnsWithoutParent.push(col);
+      } else {
+        if (!columnsByParent.has(parentColumn)) {
+          columnsByParent.set(parentColumn, []);
+        }
+        columnsByParent.get(parentColumn).push(col);
       }
-      
-      parentMap.get(parentName).push(col);
-    });
-    
-    // Remove o atributo _parentColumn das colunas sem pai também
-    columnsWithoutParent.forEach(col => {
-      delete col._parentColumn;
-    });
+    }
     
     // Cria os grupos de colunas na ordem definida pelos parentColumns
+    const columnGroups = [];
+    
     this.content.parentColumns.forEach(parent => {
-      if (parentMap.has(parent.label)) {
+      if (columnsByParent.has(parent.label)) {
         columnGroups.push({
           headerName: parent.label,
-          // Certifica que as colunas filhas mantêm suas propriedades
-          children: parentMap.get(parent.label),
+          children: columnsByParent.get(parent.label),
           // Propriedades adicionais para grupos
-          marryChildren: true,
-          // Desabilita ordenação no nível do grupo (ordenação só nas colunas filhas)
-          suppressColumnFilter: true,
-          suppressColumnsToolPanel: false,
-          enableRowGroup: false,
-          openByDefault: true,
+          marryChildren: true
         });
       }
     });
     
-    // Retornamos todas as colunas: agrupadas e não agrupadas
-    return [...columnGroups, ...unGroupedColumns];
+    // Retorna as colunas agrupadas e não agrupadas
+    return [...columnsWithoutParent, ...columnGroups];
   }
-
-  // Se não houver grupos, limpa a propriedade _parentColumn e retorna
-  processedColumns.forEach(col => {
-    delete col._parentColumn;
-  });    
   
-  // Se não há parent columns, retornamos as colunas normalmente
+  // Se não houver grupos, apenas retorna as colunas processadas
   return processedColumns;
 },
     rowSelection() {
