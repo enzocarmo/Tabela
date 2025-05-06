@@ -76,7 +76,7 @@ export default {
     readonly: true,
   });
 
-    const onGridReady = (params) => {
+   const onGridReady = (params) => {
   gridApi.value = params.api;
   
   // Adicionar listeners para vários eventos que podem mudar os dados exibidos
@@ -84,12 +84,13 @@ export default {
   gridApi.value.addEventListener('filterChanged', updateDisplayedData);
   gridApi.value.addEventListener('paginationChanged', updateDisplayedData);
 
-  updateColumnsVisibility();
+  // Garanta que updateColumnsVisibility esteja no escopo acessível
+  // usando this.updateColumnsVisibility em vez de apenas updateColumnsVisibility
+  this.updateColumnsVisibility();
       
   // Atualizar os dados inicialmente
-  updateDisplayedData();
+  this.updateDisplayedData();
 };
-
     // Adicione esta nova função para atualizar os dados exibidos
 const updateDisplayedData = () => {
   if (!gridApi.value) return;
@@ -347,39 +348,46 @@ const updateDisplayedData = () => {
 
   // Agora organizamos as colunas em grupos
   if (this.content.parentColumns && this.content.parentColumns.length > 0) {
+    // Filtra para separar colunas com e sem pais
+    const columnsWithParent = processedColumns.filter(col => col._parentColumn);
+    const columnsWithoutParent = processedColumns.filter(col => !col._parentColumn);
+    
+    // Cria um mapa para agrupar colunas por parentColumn
     const columnGroups = [];
-    const unGroupedColumns = [];
+    const parentMap = new Map();
     
-    // Criamos um mapa de colunas agrupadas
-    const groupedColumnsMap = new Map();
-    
-    // Agrupamos as colunas com base na propriedade __parentColumn
-    processedColumns.forEach(col => {
-      const parentColumn = col.__parentColumn;
-      // Remover o metadado para não afetar o AG Grid
-      delete col.__parentColumn;
+    // Agrupa as colunas por parentColumn
+    columnsWithParent.forEach(col => {
+      // Remove o atributo _parentColumn para não interferir no AG Grid
+      const parentName = col._parentColumn;
+      delete col._parentColumn;
       
-      if (parentColumn) {
-        if (!groupedColumnsMap.has(parentColumn)) {
-          groupedColumnsMap.set(parentColumn, []);
-        }
-        groupedColumnsMap.get(parentColumn).push(col);
-      } else {
-        unGroupedColumns.push(col);
+      if (!parentMap.has(parentName)) {
+        parentMap.set(parentName, []);
       }
+      
+      parentMap.get(parentName).push(col);
     });
     
-    // Criamos as colunas agrupadas baseadas na ordem dos parentColumns
+    // Remove o atributo _parentColumn das colunas sem pai também
+    columnsWithoutParent.forEach(col => {
+      delete col._parentColumn;
+    });
+    
+    // Cria os grupos de colunas na ordem definida pelos parentColumns
     this.content.parentColumns.forEach(parent => {
-      if (groupedColumnsMap.has(parent.label)) {
-        // Importante: Garantir que as propriedades de cada coluna filha sejam preservadas
-        // e que configurações como sortable e filter permaneçam intactas
+      if (parentMap.has(parent.label)) {
         columnGroups.push({
           headerName: parent.label,
-          children: groupedColumnsMap.get(parent.label),
-          // Configurações importantes para grupos
-          marryChildren: true, // Manter filhos juntos
-          openByDefault: true  // Grupo de colunas expandido por padrão
+          // Certifica que as colunas filhas mantêm suas propriedades
+          children: parentMap.get(parent.label),
+          // Propriedades adicionais para grupos
+          marryChildren: true,
+          // Desabilita ordenação no nível do grupo (ordenação só nas colunas filhas)
+          suppressColumnFilter: true,
+          suppressColumnsToolPanel: false,
+          enableRowGroup: false,
+          openByDefault: true,
         });
       }
     });
@@ -387,6 +395,11 @@ const updateDisplayedData = () => {
     // Retornamos todas as colunas: agrupadas e não agrupadas
     return [...columnGroups, ...unGroupedColumns];
   }
+
+  // Se não houver grupos, limpa a propriedade _parentColumn e retorna
+  processedColumns.forEach(col => {
+    delete col._parentColumn;
+  });    
   
   // Se não há parent columns, retornamos as colunas normalmente
   return processedColumns;
@@ -497,8 +510,12 @@ const updateDisplayedData = () => {
       hide: column.display === false
     };
     
-    // Atualiza o estado da coluna
-    this.gridApi.value.columnModel.setColumnState([columnState]);
+    // Verifica se a coluna existe antes de tentar atualizar
+    const columnExists = this.gridApi.value.getColumn(column.field);
+    if (columnExists) {
+      // Atualiza o estado da coluna
+      this.gridApi.value.columnModel.setColumnState([columnState]);
+    }
   });
   
   // Após atualizar a visibilidade, também atualizamos os dados exibidos
