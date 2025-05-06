@@ -38,7 +38,7 @@ export default {
     ImageCellRenderer,
     WewebCellRenderer,
     ComparativeCellRenderer,
-    SkeletonCellRenderer
+    SkeletonCellRenderer,
   },
   props: {
     content: {
@@ -68,88 +68,109 @@ export default {
       });
 
     const { value: dataTable, setValue: setDataTable } =
-    wwLib.wwVariable.useComponentVariable({
-    uid: props.uid,
-    name: "dataTable",
-    type: "array",
-    defaultValue: [],
-    readonly: true,
-  });
+      wwLib.wwVariable.useComponentVariable({
+        uid: props.uid,
+        name: "dataTable",
+        type: "array",
+        defaultValue: [],
+        readonly: true,
+      });
 
-   const onGridReady = function(params) {
-  // Armazenamos a referência para a API da grade
-  this.gridApi = params.api;
-  this.columnApi = params.columnApi;
-  
-  // Adicionar listeners para vários eventos que podem mudar os dados exibidos
-  this.gridApi.addEventListener('sortChanged', this.updateDisplayedData);
-  this.gridApi.addEventListener('filterChanged', this.updateDisplayedData);
-  this.gridApi.addEventListener('paginationChanged', this.updateDisplayedData);
-  
-  // Se temos colunas com parentColumns, precisamos aplicar uma configuração adicional
-  if (this.content.parentColumns && this.content.parentColumns.length > 0) {
-    // Garantir que todas as opções de ordenação e filtragem estão habilitadas corretamente
-    this.gridApi.setSuppressRowDrag(false);
-    
-    // Habilitamos movimentação de colunas se a configuração permitir
-    if (this.content.movableColumns) {
-      this.gridApi.setSuppressMovableColumns(false);
-    }
-    
-    // Habilitamos o redimensionamento se a configuração permitir
-    if (this.content.resizableColumns) {
-      this.columnApi.setColumnsResizable(true);
-    }
-  }
-  
-  // Garanta que updateColumnsVisibility esteja disponível
-  this.updateColumnsVisibility();
-  
-  // Atualizamos o estado das colunas
-  this.refreshColumnState();
-      
-  // Atualizar os dados inicialmente
-  this.updateDisplayedData();
-  
-  // Ajustar o tamanho das colunas automaticamente se necessário
-  if (this.content.autoSizeColumns) {
-    this.sizeColumnsToFit();
-  }
-};
-    // Adicione esta nova função para atualizar os dados exibidos
-const updateDisplayedData = () => {
-  if (!gridApi.value) return;
-  
-  let displayedData = [];
-  
-  if (props.content.pagination) {
-    // Se tiver paginação, pegamos apenas os dados da página atual
-    const currentPage = gridApi.value.paginationGetCurrentPage();
-    const pageSize = props.content.paginationPageSize || 10;
-    const startRow = currentPage * pageSize;
-    const endRow = startRow + pageSize;
-    
-    let rowIndex = 0;
-    gridApi.value.forEachNodeAfterFilterAndSort((node) => {
-      if (rowIndex >= startRow && rowIndex < endRow) {
-        displayedData.push(node.data);
+    const onGridReady = (params) => {
+      // Armazenar referência para a API da grade corretamente
+      gridApi.value = params.api;
+      const columnApi = params.columnApi;
+
+      // Adicionar listeners para eventos usando a referência correta
+      gridApi.value.addEventListener('sortChanged', updateDisplayedData);
+      gridApi.value.addEventListener('filterChanged', updateDisplayedData);
+      gridApi.value.addEventListener('paginationChanged', updateDisplayedData);
+
+      // Resto da configuração
+      if (props.content.parentColumns && props.content.parentColumns.length > 0) {
+        // Configurações para colunas com parentColumns
+        gridApi.value.setSuppressRowDrag(false);
+
+        if (props.content.movableColumns) {
+          gridApi.value.setSuppressMovableColumns(false);
+        }
+
+        if (props.content.resizableColumns) {
+          columnApi.setColumnsResizable(true);
+        }
       }
-      rowIndex++;
-    });
-  } else {
-    // Se não tiver paginação, pegamos todos os dados filtrados e ordenados
-    gridApi.value.forEachNodeAfterFilterAndSort((node) => {
-      displayedData.push(node.data);
-    });
-  }
-  
-  // Removemos linhas de skeleton
-  displayedData = displayedData.filter(row => !row?._isSkeletonRow);
-  
-  // Atualizamos a variável
-  setDataTable(displayedData);
-};
-    
+
+      // Garantir que as funções estejam disponíveis e sejam chamadas na ordem correta
+      updateColumnsVisibility();
+      refreshColumnState();
+      updateDisplayedData();
+
+      if (props.content.autoSizeColumns) {
+        sizeColumnsToFit();
+      }
+    };
+
+    const updateDisplayedData = () => {
+      if (!gridApi.value) {
+        console.warn('updateDisplayedData: gridApi is not available');
+        return;
+      }
+
+      try {
+        let displayedData = [];
+
+        if (props.content.pagination) {
+          const currentPage = gridApi.value.paginationGetCurrentPage();
+          const pageSize = props.content.paginationPageSize || 10;
+          const startRow = currentPage * pageSize;
+          const endRow = startRow + pageSize;
+
+          let rowIndex = 0;
+          gridApi.value.forEachNodeAfterFilterAndSort((node) => {
+            if (rowIndex >= startRow && rowIndex < endRow) {
+              displayedData.push(node.data);
+            }
+            rowIndex++;
+          });
+        } else {
+          gridApi.value.forEachNodeAfterFilterAndSort((node) => {
+            displayedData.push(node.data);
+          });
+        }
+
+        // Remover linhas de skeleton
+        displayedData = displayedData.filter(row => !row?._isSkeletonRow);
+
+        // Atualizar a variável
+        setDataTable(displayedData);
+        console.log('Data table updated with', displayedData.length, 'rows');
+      } catch (error) {
+        console.error('Error in updateDisplayedData:', error);
+      }
+    };
+
+    const sizeColumnsToFit = () => {
+      if (!gridApi.value) return;
+
+      try {
+        // Obtenha todas as colunas visíveis
+        const allColumnIds = [];
+        gridApi.value.getColumns().forEach((column) => {
+          allColumnIds.push(column.getId());
+        });
+
+        if (allColumnIds.length > 0) {
+          // Aplique autoSize nas colunas visíveis
+          gridApi.value.autoSizeColumns(allColumnIds, false);
+
+          // Registre que a operação foi concluída
+          console.log('Columns auto-sized:', allColumnIds);
+        }
+      } catch (error) {
+        console.error('Error in sizeColumnsToFit:', error);
+      }
+    };
+
     const onRowSelected = (event) => {
       const name = event.node.isSelected() ? "rowSelected" : "rowDeselected";
       ctx.emit("trigger-event", {
@@ -175,8 +196,9 @@ const updateDisplayedData = () => {
       onSelectionChanged,
       gridApi,
       AG_GRID_LOCALE_BR,
-      setDataTable,        // Adicionando setDataTable
-      updateDisplayedData, // Adicionando updateDisplayedData
+      setDataTable, // Adicionando setDataTable
+      updateDisplayedData, // Adicionando updateDisplayedData,
+      sizeColumnsToFit,
       /* wwEditor:start */
       createElement,
       /* wwEditor:end */
@@ -190,19 +212,21 @@ const updateDisplayedData = () => {
     computedRowData() {
       if (this.content.loading) {
         // Gerar 15 linhas de skeleton
-        const skeletonRows = Array(15).fill().map((_, index) => {
-          const row = {
-            _isSkeletonRow: true,
-            _skeletonId: `skeleton-${index}` // Propriedade para uso no idFormula caso necessário
-          };
-          // Adicionar um campo para cada coluna
-          this.content.columns.forEach(column => {
-            if (column.field) {
-              row[column.field] = null;
-            }
+        const skeletonRows = Array(15)
+          .fill()
+          .map((_, index) => {
+            const row = {
+              _isSkeletonRow: true,
+              _skeletonId: `skeleton-${index}`, // Propriedade para uso no idFormula caso necessário
+            };
+            // Adicionar um campo para cada coluna
+            this.content.columns.forEach((column) => {
+              if (column.field) {
+                row[column.field] = null;
+              }
+            });
+            return row;
           });
-          return row;
-        });
         return skeletonRows;
       }
 
@@ -210,30 +234,34 @@ const updateDisplayedData = () => {
       return this.rowData;
     },
     totalRowData() {
-  if (!this.content.showTotalRow) return null;
+      if (!this.content.showTotalRow) return null;
 
-  // Create an empty object for the total row
-  const totalRow = {};
+      // Create an empty object for the total row
+      const totalRow = {};
 
-  // Add the totals from each column's totalValue field
-  this.content.columns.forEach(column => {
-    // Verifica se a coluna tem totalValue definido
-    if (column.totalValue) {
-      // Verifica se as colunas são bindable (dinâmicas)
-      if (this.wwEditorState?.boundProps?.columns) {
-        // Se for bindable, tenta usar a propriedade 'total' do objeto
-        // Assume que totalValue é um objeto com a propriedade 'total'
-        totalRow[column.field] = column.totalValue?.total || 
-                               this.resolveMappingFormula(column.totalValue, null);
-      } else {
-        // Se não for bindable, usa a fórmula como antes
-        totalRow[column.field] = this.resolveMappingFormula(column.totalValue, null);
-      }
-    }
-  });
+      // Add the totals from each column's totalValue field
+      this.content.columns.forEach((column) => {
+        // Verifica se a coluna tem totalValue definido
+        if (column.totalValue) {
+          // Verifica se as colunas são bindable (dinâmicas)
+          if (this.wwEditorState?.boundProps?.columns) {
+            // Se for bindable, tenta usar a propriedade 'total' do objeto
+            // Assume que totalValue é um objeto com a propriedade 'total'
+            totalRow[column.field] =
+              column.totalValue?.total ||
+              this.resolveMappingFormula(column.totalValue, null);
+          } else {
+            // Se não for bindable, usa a fórmula como antes
+            totalRow[column.field] = this.resolveMappingFormula(
+              column.totalValue,
+              null
+            );
+          }
+        }
+      });
 
-  return [totalRow];
-},
+      return [totalRow];
+    },
     defaultColDef() {
       return {
         editable: false,
@@ -242,187 +270,193 @@ const updateDisplayedData = () => {
     },
 
     columnDefs() {
-  // Primeiro, processamos as colunas com suas configurações básicas
-  const processedColumns = this.content.columns.map((col) => {
-    const minWidth = !col.minWidth || col.minWidth === "auto" 
-      ? null 
-      : wwLib.wwUtils.getLengthUnit(col.minWidth)?.[0];
-    const maxWidth = !col.maxWidth || col.maxWidth === "auto" 
-      ? null 
-      : wwLib.wwUtils.getLengthUnit(col.maxWidth)?.[0];
-    const width = !col.width || col.width === "auto" || col.widthAlgo === "flex" 
-      ? null 
-      : wwLib.wwUtils.getLengthUnit(col.width)?.[0];
-    const flex = col.widthAlgo === "flex" ? col.flex ?? 1 : null;
-    
-    // Propriedades básicas da coluna
-    const columnDef = {
-      field: col.field,
-      headerName: col.headerName,
-      minWidth,
-      maxWidth,
-      width,
-      flex,
-      pinned: col.pinned === "none" ? false : col.pinned,
-      hide: col.display === false,
-      sortable: col.sortable === false ? false : !!col.sortable,
-      filter: col.filter === false ? false : !!col.filter,
-      editable: !!col.editable,
-      colId: col.field, // Garantir que temos um ID único e estável
-      // Armazenamos o parentColumn como metadado
-      parentColumn: col.parentColumn || null
-    };
-    
-    // Se estiver em modo de carregamento, simplifica para o renderer de skeleton
-    if (this.content.loading) {
-      return {
-        ...columnDef,
-        cellRenderer: "SkeletonCellRenderer",
-        sortable: false,
-        filter: false
-      };
-    }
-    
-    // Processamento específico por tipo de célula
-    switch (col.cellDataType) {
-      case "action": {
-        return {
-          ...columnDef,
-          cellRenderer: "ActionCellRenderer",
-          cellRendererParams: {
-            name: col.actionName,
-            label: col.actionLabel,
-            trigger: this.onActionTrigger,
-            withFont: !!this.content.actionFont,
-          },
-          sortable: false,
-          filter: false
+      // Primeiro, processamos as colunas com suas configurações básicas
+      const processedColumns = this.content.columns.map((col) => {
+        const minWidth =
+          !col.minWidth || col.minWidth === "auto"
+            ? null
+            : wwLib.wwUtils.getLengthUnit(col.minWidth)?.[0];
+        const maxWidth =
+          !col.maxWidth || col.maxWidth === "auto"
+            ? null
+            : wwLib.wwUtils.getLengthUnit(col.maxWidth)?.[0];
+        const width =
+          !col.width || col.width === "auto" || col.widthAlgo === "flex"
+            ? null
+            : wwLib.wwUtils.getLengthUnit(col.width)?.[0];
+        const flex = col.widthAlgo === "flex" ? col.flex ?? 1 : null;
+
+        // Propriedades básicas da coluna
+        const columnDef = {
+          field: col.field,
+          headerName: col.headerName,
+          minWidth,
+          maxWidth,
+          width,
+          flex,
+          pinned: col.pinned === "none" ? false : col.pinned,
+          hide: col.display === false,
+          sortable: col.sortable === false ? false : !!col.sortable,
+          filter: col.filter === false ? false : !!col.filter,
+          editable: !!col.editable,
+          colId: col.field, // Garantir que temos um ID único e estável
+          // Armazenamos o parentColumn como metadado
+          parentColumn: col.parentColumn || null,
         };
-      }
-      case "custom": {
-        return {
-          ...columnDef,
-          cellRenderer: "WewebCellRenderer",
-          cellRendererParams: {
-            containerId: col.containerId,
-          }
-        };
-      }
-      case "image": {
-        return {
-          ...columnDef,
-          cellRenderer: "ImageCellRenderer",
-          cellRendererParams: {
-            width: col.imageWidth,
-            height: col.imageHeight,
-          }
-        };
-      }
-      // Tipos de células com formatadores
-      case "formatted-number": {
-        return {
-          ...columnDef,
-          valueFormatter: (params) => {
-            if (params.value === null || params.value === undefined) return '';
-            return this.formatNumber(params.value);
-          }
-        };
-      }
-      case "currency": {
-        return {
-          ...columnDef,
-          valueFormatter: (params) => {
-            if (params.value === null || params.value === undefined) return '';
-            return `R$ ${this.formatNumber(params.value)}`;
-          }
-        };
-      }
-      case "percentage": {
-        return {
-          ...columnDef,
-          valueFormatter: (params) => {
-            if (params.value === null || params.value === undefined) return '';
-            return `${this.formatNumber(params.value)}%`;
-          }
-        };
-      }
-      default: {
-        // Configurações para outros tipos de células
-        if (col.comparative) {
-          columnDef.cellRenderer = "ComparativeCellRenderer";
-        }
-        
-        if (col.useCustomLabel) {
-          columnDef.valueFormatter = (params) => {
-            return this.resolveMappingFormula(
-              col.displayLabelFormula,
-              params.value
-            );
+
+        // Se estiver em modo de carregamento, simplifica para o renderer de skeleton
+        if (this.content.loading) {
+          return {
+            ...columnDef,
+            cellRenderer: "SkeletonCellRenderer",
+            sortable: false,
+            filter: false,
           };
         }
-        
-        return columnDef;
-      }
-    }
-  });
-  
-  // Agora organizamos as colunas em grupos se existirem parentColumns
-  if (this.content.parentColumns && this.content.parentColumns.length > 0) {
-    // Filtra para separar colunas com e sem pais
-    const columnsWithoutParent = [];
-    const columnsByParent = new Map();
-    
-    // Agrupa as colunas por parentColumn
-    for (const col of processedColumns) {
-      const parentColumn = col.parentColumn;
-      
-      if (!parentColumn) {
-        columnsWithoutParent.push(col);
-        // Removemos a propriedade parentColumn que não é reconhecida pelo ag-grid
-        delete col.parentColumn;
-      } else {
-        if (!columnsByParent.has(parentColumn)) {
-          columnsByParent.set(parentColumn, []);
+
+        // Processamento específico por tipo de célula
+        switch (col.cellDataType) {
+          case "action": {
+            return {
+              ...columnDef,
+              cellRenderer: "ActionCellRenderer",
+              cellRendererParams: {
+                name: col.actionName,
+                label: col.actionLabel,
+                trigger: this.onActionTrigger,
+                withFont: !!this.content.actionFont,
+              },
+              sortable: false,
+              filter: false,
+            };
+          }
+          case "custom": {
+            return {
+              ...columnDef,
+              cellRenderer: "WewebCellRenderer",
+              cellRendererParams: {
+                containerId: col.containerId,
+              },
+            };
+          }
+          case "image": {
+            return {
+              ...columnDef,
+              cellRenderer: "ImageCellRenderer",
+              cellRendererParams: {
+                width: col.imageWidth,
+                height: col.imageHeight,
+              },
+            };
+          }
+          // Tipos de células com formatadores
+          case "formatted-number": {
+            return {
+              ...columnDef,
+              valueFormatter: (params) => {
+                if (params.value === null || params.value === undefined)
+                  return "";
+                return this.formatNumber(params.value);
+              },
+            };
+          }
+          case "currency": {
+            return {
+              ...columnDef,
+              valueFormatter: (params) => {
+                if (params.value === null || params.value === undefined)
+                  return "";
+                return `R$ ${this.formatNumber(params.value)}`;
+              },
+            };
+          }
+          case "percentage": {
+            return {
+              ...columnDef,
+              valueFormatter: (params) => {
+                if (params.value === null || params.value === undefined)
+                  return "";
+                return `${this.formatNumber(params.value)}%`;
+              },
+            };
+          }
+          default: {
+            // Configurações para outros tipos de células
+            if (col.comparative) {
+              columnDef.cellRenderer = "ComparativeCellRenderer";
+            }
+
+            if (col.useCustomLabel) {
+              columnDef.valueFormatter = (params) => {
+                return this.resolveMappingFormula(
+                  col.displayLabelFormula,
+                  params.value
+                );
+              };
+            }
+
+            return columnDef;
+          }
         }
-        // Removemos a propriedade parentColumn que não é reconhecida pelo ag-grid
-        delete col.parentColumn;
-        columnsByParent.get(parentColumn).push(col);
-      }
-    }
-    
-    // Cria os grupos de colunas na ordem definida pelos parentColumns
-    const columnGroups = [];
-    
-    this.content.parentColumns.forEach(parent => {
-      if (columnsByParent.has(parent.label)) {
-        columnGroups.push({
-          headerName: parent.label,
-          children: columnsByParent.get(parent.label),
-          // Propriedades importantes para grupos
-          marryChildren: true,
-          // Adicionamos um identificador único e estável para o grupo
-          groupId: `group_${parent.label}`,
-          // Garantimos que as propriedades de cada grupo são explícitas
-          sortable: true,
-          resizable: this.content.resizableColumns,
-          suppressMovable: !this.content.movableColumns
+      });
+
+      // Agora organizamos as colunas em grupos se existirem parentColumns
+      if (this.content.parentColumns && this.content.parentColumns.length > 0) {
+        // Filtra para separar colunas com e sem pais
+        const columnsWithoutParent = [];
+        const columnsByParent = new Map();
+
+        // Agrupa as colunas por parentColumn
+        for (const col of processedColumns) {
+          const parentColumn = col.parentColumn;
+
+          if (!parentColumn) {
+            columnsWithoutParent.push(col);
+            // Removemos a propriedade parentColumn que não é reconhecida pelo ag-grid
+            delete col.parentColumn;
+          } else {
+            if (!columnsByParent.has(parentColumn)) {
+              columnsByParent.set(parentColumn, []);
+            }
+            // Removemos a propriedade parentColumn que não é reconhecida pelo ag-grid
+            delete col.parentColumn;
+            columnsByParent.get(parentColumn).push(col);
+          }
+        }
+
+        // Cria os grupos de colunas na ordem definida pelos parentColumns
+        const columnGroups = [];
+
+        this.content.parentColumns.forEach((parent) => {
+          if (columnsByParent.has(parent.label)) {
+            columnGroups.push({
+              headerName: parent.label,
+              children: columnsByParent.get(parent.label),
+              // Propriedades importantes para grupos
+              marryChildren: true,
+              // Adicionamos um identificador único e estável para o grupo
+              groupId: `group_${parent.label}`,
+              // Garantimos que as propriedades de cada grupo são explícitas
+              sortable: true,
+              resizable: this.content.resizableColumns,
+              suppressMovable: !this.content.movableColumns,
+            });
+          }
         });
+
+        // Retorna as colunas agrupadas e não agrupadas
+        return [...columnsWithoutParent, ...columnGroups];
       }
-    });
-    
-    // Retorna as colunas agrupadas e não agrupadas
-    return [...columnsWithoutParent, ...columnGroups];
-  }
-  
-  // Se não houver grupos, apenas retorna as colunas processadas
-  // Garantimos que removemos a propriedade parentColumn
-  return processedColumns.map(col => {
-    const newCol = { ...col };
-    delete newCol.parentColumn;
-    return newCol;
-  });
-},
-    
+
+      // Se não houver grupos, apenas retorna as colunas processadas
+      // Garantimos que removemos a propriedade parentColumn
+      return processedColumns.map((col) => {
+        const newCol = { ...col };
+        delete newCol.parentColumn;
+        return newCol;
+      });
+    },
+
     rowSelection() {
       if (this.content.rowSelection === "multiple") {
         return { mode: "multiRow", checkboxes: true };
@@ -520,75 +554,79 @@ const updateDisplayedData = () => {
       });
     },
     // Nova função para atualizar o estado das colunas
-refreshColumnState() {
-  if (!this.gridApi || !this.columnApi) return;
-  
-  // Obtemos o estado atual das colunas
-  const columnState = this.columnApi.getColumnState();
-  
-  // Para cada coluna definida no conteúdo, atualizamos suas propriedades
-  this.content.columns.forEach(column => {
-    // Encontramos a coluna correspondente no estado
-    const stateColumn = columnState.find(state => state.colId === column.field);
-    if (stateColumn) {
-      // Atualizamos as propriedades da coluna
-      stateColumn.hide = column.display === false;
-      stateColumn.pinned = column.pinned === "none" ? null : column.pinned;
-      
-      // Se a coluna tiver um parentColumn, precisamos garantir que ela esteja
-      // associada ao grupo correto
-      if (column.parentColumn) {
-        // Encontramos o grupo pai
-        const parentGroup = this.content.parentColumns.find(
-          parent => parent.label === column.parentColumn
+    refreshColumnState() {
+      if (!this.gridApi || !this.columnApi) return;
+
+      // Obtemos o estado atual das colunas
+      const columnState = this.columnApi.getColumnState();
+
+      // Para cada coluna definida no conteúdo, atualizamos suas propriedades
+      this.content.columns.forEach((column) => {
+        // Encontramos a coluna correspondente no estado
+        const stateColumn = columnState.find(
+          (state) => state.colId === column.field
         );
-        
-        if (parentGroup) {
-          // Garantimos que a coluna pertence ao grupo correto
-          // O AG Grid usa internamente uma estrutura de grupos
-          // Aqui apenas garantimos que o estado da coluna está correto
-          stateColumn.flex = column.widthAlgo === "flex" ? column.flex ?? 1 : null;
-          stateColumn.width = !column.width || column.width === "auto" 
-            ? null 
-            : wwLib.wwUtils.getLengthUnit(column.width)?.[0];
+        if (stateColumn) {
+          // Atualizamos as propriedades da coluna
+          stateColumn.hide = column.display === false;
+          stateColumn.pinned = column.pinned === "none" ? null : column.pinned;
+
+          // Se a coluna tiver um parentColumn, precisamos garantir que ela esteja
+          // associada ao grupo correto
+          if (column.parentColumn) {
+            // Encontramos o grupo pai
+            const parentGroup = this.content.parentColumns.find(
+              (parent) => parent.label === column.parentColumn
+            );
+
+            if (parentGroup) {
+              // Garantimos que a coluna pertence ao grupo correto
+              // O AG Grid usa internamente uma estrutura de grupos
+              // Aqui apenas garantimos que o estado da coluna está correto
+              stateColumn.flex =
+                column.widthAlgo === "flex" ? column.flex ?? 1 : null;
+              stateColumn.width =
+                !column.width || column.width === "auto"
+                  ? null
+                  : wwLib.wwUtils.getLengthUnit(column.width)?.[0];
+            }
+          }
         }
-      }
-    }
-  });
-  
-  // Aplicamos o estado atualizado das colunas
-  this.columnApi.applyColumnState({ state: columnState });
-},
+      });
+
+      // Aplicamos o estado atualizado das colunas
+      this.columnApi.applyColumnState({ state: columnState });
+    },
     updateColumnsVisibility() {
-  if (!this.gridApi?.value) return;
-  
-  // Para cada coluna na configuração
-  this.content.columns.forEach(column => {
-    const columnState = {
-      colId: column.field,
-      hide: column.display === false
-    };
-    
-    // Verifica se a coluna existe antes de tentar atualizar
-    const columnExists = this.gridApi.value.getColumn(column.field);
-    if (columnExists) {
-      // Atualiza o estado da coluna
-      this.gridApi.value.columnModel.setColumnState([columnState]);
-    }
-  });
-  
-  // Após atualizar a visibilidade, também atualizamos os dados exibidos
-  this.updateDisplayedData();
-},
+      if (!this.gridApi?.value) return;
+
+      // Para cada coluna na configuração
+      this.content.columns.forEach((column) => {
+        const columnState = {
+          colId: column.field,
+          hide: column.display === false,
+        };
+
+        // Verifica se a coluna existe antes de tentar atualizar
+        const columnExists = this.gridApi.value.getColumn(column.field);
+        if (columnExists) {
+          // Atualiza o estado da coluna
+          this.gridApi.value.columnModel.setColumnState([columnState]);
+        }
+      });
+
+      // Após atualizar a visibilidade, também atualizamos os dados exibidos
+      this.updateDisplayedData();
+    },
     formatNumber(value) {
       // Garante que o valor é um número
       const num = Number(value);
       if (isNaN(num)) return value;
 
       // Formata o número com pontos para milhares e vírgula para decimais
-      return num.toLocaleString('pt-BR', {
+      return num.toLocaleString("pt-BR", {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 2,
       });
     },
     // Novo método para tratar o double click na linha
@@ -600,52 +638,6 @@ refreshColumnState() {
         },
       });
     },
-    updateDisplayedData() {
-    if (!this.gridApi?.value) return;
-    
-    let displayedData = [];
-    
-    if (this.content.pagination) {
-      const currentPage = this.gridApi.value.paginationGetCurrentPage();
-      const pageSize = this.content.paginationPageSize || 10;
-      const startRow = currentPage * pageSize;
-      const endRow = startRow + pageSize;
-      
-      let rowIndex = 0;
-      this.gridApi.value.forEachNodeAfterFilterAndSort((node) => {
-        if (rowIndex >= startRow && rowIndex < endRow) {
-          displayedData.push(node.data);
-        }
-        rowIndex++;
-      });
-    } else {
-      this.gridApi.value.forEachNodeAfterFilterAndSort((node) => {
-        displayedData.push(node.data);
-      });
-    }
-    
-    // Removemos linhas de skeleton
-    displayedData = displayedData.filter(row => !row?._isSkeletonRow);
-    
-    // Atualizamos a variável
-    this.setDataTable(displayedData);
-  },
-    // Método para ajustar automaticamente o tamanho de todas as colunas com base no conteúdo
-  sizeColumnsToFit() {
-    const api = this.gridApi?.value || this.gridApi;
-    
-    if (api) {
-      // Obtém todos os IDs de coluna
-      const allColumnIds = [];
-      api.getColumns().forEach((column) => {
-        allColumnIds.push(column.getId());
-      });
-      
-      // Aplica o autoSize em todas as colunas
-      // Parâmetro false para não pular o cabeçalho no cálculo de largura
-      api.autoSizeColumns(allColumnIds, false);
-    }
-  },
     /* wwEditor:start */
     generateColumns() {
       this.$emit("update:content", {
@@ -723,53 +715,54 @@ refreshColumnState() {
       deep: true,
     },
     computedRowData: {
-    handler() {
-      this.$nextTick(() => {
-        if (this.gridApi?.value) {
-          this.updateDisplayedData();
-        }
-      });
+      handler() {
+        this.$nextTick(() => {
+          if (this.gridApi?.value) {
+            this.updateDisplayedData();
+          }
+        });
+      },
+      deep: true,
     },
-    deep: true
-  },
-  // No watch section do componente
-'content.columns': {
-  handler(newColumns, oldColumns) {
-    // Verificamos se houve mudança nas propriedades das colunas
-    const columnsChanged = JSON.stringify(newColumns) !== JSON.stringify(oldColumns);
-    
-    // Se as colunas foram alteradas e temos acesso à API da grade
-    if (columnsChanged && this.gridApi?.value) {
-      this.$nextTick(() => {
-        // Primeiro atualizamos a visibilidade das colunas
-        this.updateColumnsVisibility();
-        
-        // Depois atualizamos o estado completo das colunas 
-        // (para garantir parent columns, ordenação, etc.)
-        this.refreshColumnState();
-        
-        // Finalmente, atualizamos os dados exibidos
-        this.updateDisplayedData();
-      });
-    }
-  },
-  deep: true
-},
+    // No watch section do componente
+    "content.columns": {
+      handler(newColumns, oldColumns) {
+        // Verificamos se houve mudança nas propriedades das colunas
+        const columnsChanged =
+          JSON.stringify(newColumns) !== JSON.stringify(oldColumns);
+
+        // Se as colunas foram alteradas e temos acesso à API da grade
+        if (columnsChanged && this.gridApi?.value) {
+          this.$nextTick(() => {
+            // Primeiro atualizamos a visibilidade das colunas
+            this.updateColumnsVisibility();
+
+            // Depois atualizamos o estado completo das colunas
+            // (para garantir parent columns, ordenação, etc.)
+            this.refreshColumnState();
+
+            // Finalmente, atualizamos os dados exibidos
+            this.updateDisplayedData();
+          });
+        }
+      },
+      deep: true,
+    },
     // Adicionamos um watcher específico para parentColumns
-'content.parentColumns': {
-  handler() {
-    // Se temos acesso à API da grade
-    if (this.gridApi?.value) {
-      this.$nextTick(() => {
-        // Para mudanças em parentColumns, precisamos forçar uma atualização completa
-        // da estrutura de colunas, o que é mais facilmente feito recarregando a grade
-        this.gridApi.value.setColumnDefs(this.columnDefs);
-        this.refreshColumnState();
-      });
-    }
-  },
-  deep: true
-}
+    "content.parentColumns": {
+      handler() {
+        // Se temos acesso à API da grade
+        if (this.gridApi?.value) {
+          this.$nextTick(() => {
+            // Para mudanças em parentColumns, precisamos forçar uma atualização completa
+            // da estrutura de colunas, o que é mais facilmente feito recarregando a grade
+            this.gridApi.value.setColumnDefs(this.columnDefs);
+            this.refreshColumnState();
+          });
+        }
+      },
+      deep: true,
+    },
   },
   /* wwEditor:end */
 };
@@ -812,7 +805,7 @@ refreshColumnState() {
 
 .skeleton-loader {
   height: 14px;
-  background-color: #A19B9D4D;
+  background-color: #a19b9d4d;
   border-radius: 2px;
   width: 100%;
   animation: skeleton-wave 1.5s ease-in-out infinite;
@@ -837,7 +830,10 @@ refreshColumnState() {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(255, 255, 255, 0.2),
+      transparent);
   animation: skeleton-wave 1.5s ease-in-out 0.5s infinite;
 }
 </style>
