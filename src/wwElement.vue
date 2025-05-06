@@ -238,9 +238,7 @@ const updateDisplayedData = () => {
         width,
         flex,
         hide: col.display === false, 
-        context: {
-          parentColumn: col.parentColumn
-        }
+        __parentColumn: col.parentColumn
       };
       
       if (this.content.loading) {
@@ -279,8 +277,8 @@ const updateDisplayedData = () => {
             cellRendererParams: {
               containerId: col.containerId,
             },
-            sortable: col.sortable,
-            filter: col.filter
+            sortable: col.sortable !== undefined ? col.sortable : true,
+            filter: col.filter !== undefined ? col.filter : true
           };
         case "image": {
           return {
@@ -291,7 +289,9 @@ const updateDisplayedData = () => {
             cellRendererParams: {
               width: col.imageWidth,
               height: col.imageHeight,
-            }
+            },
+            sortable: col.sortable !== undefined ? col.sortable : true,
+            filter: col.filter !== undefined ? col.filter : true
           };
         }
         // No caso default
@@ -300,9 +300,9 @@ const updateDisplayedData = () => {
             ...commonProperties,
             headerName: col.headerName,
             field: col.field,
-            sortable: col.sortable,
-            filter: col.filter,
-            editable: col.editable
+            sortable: col.sortable !== undefined ? col.sortable : true,
+            filter: col.filter !== undefined ? col.filter : true,
+            editable: col.editable !== undefined ? col.editable : false
           };
 
           if (col.comparative) {
@@ -353,9 +353,12 @@ const updateDisplayedData = () => {
     // Criamos um mapa de colunas agrupadas
     const groupedColumnsMap = new Map();
     
-    // Agrupamos as colunas
+    // Agrupamos as colunas com base na propriedade __parentColumn
     processedColumns.forEach(col => {
-      const parentColumn = col.context?.parentColumn;
+      const parentColumn = col.__parentColumn;
+      // Remover o metadado para não afetar o AG Grid
+      delete col.__parentColumn;
+      
       if (parentColumn) {
         if (!groupedColumnsMap.has(parentColumn)) {
           groupedColumnsMap.set(parentColumn, []);
@@ -369,9 +372,14 @@ const updateDisplayedData = () => {
     // Criamos as colunas agrupadas baseadas na ordem dos parentColumns
     this.content.parentColumns.forEach(parent => {
       if (groupedColumnsMap.has(parent.label)) {
+        // Importante: Garantir que as propriedades de cada coluna filha sejam preservadas
+        // e que configurações como sortable e filter permaneçam intactas
         columnGroups.push({
           headerName: parent.label,
-          children: groupedColumnsMap.get(parent.label)
+          children: groupedColumnsMap.get(parent.label),
+          // Configurações importantes para grupos
+          marryChildren: true, // Manter filhos juntos
+          openByDefault: true  // Grupo de colunas expandido por padrão
         });
       }
     });
