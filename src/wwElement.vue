@@ -76,20 +76,45 @@ export default {
     readonly: true,
   });
 
-   const onGridReady = (params) => {
-  gridApi.value = params.api;
+   const onGridReady = function(params) {
+  // Armazenamos a referência para a API da grade
+  this.gridApi = params.api;
+  this.columnApi = params.columnApi;
   
   // Adicionar listeners para vários eventos que podem mudar os dados exibidos
-  gridApi.value.addEventListener('sortChanged', updateDisplayedData);
-  gridApi.value.addEventListener('filterChanged', updateDisplayedData);
-  gridApi.value.addEventListener('paginationChanged', updateDisplayedData);
-
-  // Garanta que updateColumnsVisibility esteja no escopo acessível
-  // usando this.updateColumnsVisibility em vez de apenas updateColumnsVisibility
+  this.gridApi.addEventListener('sortChanged', this.updateDisplayedData);
+  this.gridApi.addEventListener('filterChanged', this.updateDisplayedData);
+  this.gridApi.addEventListener('paginationChanged', this.updateDisplayedData);
+  
+  // Se temos colunas com parentColumns, precisamos aplicar uma configuração adicional
+  if (this.content.parentColumns && this.content.parentColumns.length > 0) {
+    // Garantir que todas as opções de ordenação e filtragem estão habilitadas corretamente
+    this.gridApi.setSuppressRowDrag(false);
+    
+    // Habilitamos movimentação de colunas se a configuração permitir
+    if (this.content.movableColumns) {
+      this.gridApi.setSuppressMovableColumns(false);
+    }
+    
+    // Habilitamos o redimensionamento se a configuração permitir
+    if (this.content.resizableColumns) {
+      this.columnApi.setColumnsResizable(true);
+    }
+  }
+  
+  // Garanta que updateColumnsVisibility esteja disponível
   this.updateColumnsVisibility();
+  
+  // Atualizamos o estado das colunas
+  this.refreshColumnState();
       
   // Atualizar os dados inicialmente
   this.updateDisplayedData();
+  
+  // Ajustar o tamanho das colunas automaticamente se necessário
+  if (this.content.autoSizeColumns) {
+    this.sizeColumnsToFit();
+  }
 };
     // Adicione esta nova função para atualizar os dados exibidos
 const updateDisplayedData = () => {
@@ -215,6 +240,7 @@ const updateDisplayedData = () => {
         resizable: this.content.resizableColumns,
       };
     },
+
     columnDefs() {
   // Primeiro, processamos as colunas com suas configurações básicas
   const processedColumns = this.content.columns.map((col) => {
@@ -239,13 +265,12 @@ const updateDisplayedData = () => {
       flex,
       pinned: col.pinned === "none" ? false : col.pinned,
       hide: col.display === false,
-      sortable: !!col.sortable,
-      filter: !!col.filter,
+      sortable: col.sortable === false ? false : !!col.sortable,
+      filter: col.filter === false ? false : !!col.filter,
       editable: !!col.editable,
-      // Usamos o objeto context para armazenar metadados adicionais
-      context: {
-        parentColumn: col.parentColumn
-      }
+      colId: col.field, // Garantir que temos um ID único e estável
+      // Armazenamos o parentColumn como metadado
+      parentColumn: col.parentColumn || null
     };
     
     // Se estiver em modo de carregamento, simplifica para o renderer de skeleton
@@ -349,14 +374,18 @@ const updateDisplayedData = () => {
     
     // Agrupa as colunas por parentColumn
     for (const col of processedColumns) {
-      const parentColumn = col.context?.parentColumn;
+      const parentColumn = col.parentColumn;
       
       if (!parentColumn) {
         columnsWithoutParent.push(col);
+        // Removemos a propriedade parentColumn que não é reconhecida pelo ag-grid
+        delete col.parentColumn;
       } else {
         if (!columnsByParent.has(parentColumn)) {
           columnsByParent.set(parentColumn, []);
         }
+        // Removemos a propriedade parentColumn que não é reconhecida pelo ag-grid
+        delete col.parentColumn;
         columnsByParent.get(parentColumn).push(col);
       }
     }
@@ -369,8 +398,14 @@ const updateDisplayedData = () => {
         columnGroups.push({
           headerName: parent.label,
           children: columnsByParent.get(parent.label),
-          // Propriedades adicionais para grupos
-          marryChildren: true
+          // Propriedades importantes para grupos
+          marryChildren: true,
+          // Adicionamos um identificador único e estável para o grupo
+          groupId: `group_${parent.label}`,
+          // Garantimos que as propriedades de cada grupo são explícitas
+          sortable: true,
+          resizable: this.content.resizableColumns,
+          suppressMovable: !this.content.movableColumns
         });
       }
     });
@@ -380,8 +415,14 @@ const updateDisplayedData = () => {
   }
   
   // Se não houver grupos, apenas retorna as colunas processadas
-  return processedColumns;
+  // Garantimos que removemos a propriedade parentColumn
+  return processedColumns.map(col => {
+    const newCol = { ...col };
+    delete newCol.parentColumn;
+    return newCol;
+  });
 },
+    
     rowSelection() {
       if (this.content.rowSelection === "multiple") {
         return { mode: "multiRow", checkboxes: true };
@@ -478,6 +519,46 @@ const updateDisplayedData = () => {
         },
       });
     },
+    // Nova função para atualizar o estado das colunas
+refreshColumnState() {
+  if (!this.gridApi || !this.columnApi) return;
+  
+  // Obtemos o estado atual das colunas
+  const columnState = this.columnApi.getColumnState();
+  
+  // Para cada coluna definida no conteúdo, atualizamos suas propriedades
+  this.content.columns.forEach(column => {
+    // Encontramos a coluna correspondente no estado
+    const stateColumn = columnState.find(state => state.colId === column.field);
+    if (stateColumn) {
+      // Atualizamos as propriedades da coluna
+      stateColumn.hide = column.display === false;
+      stateColumn.pinned = column.pinned === "none" ? null : column.pinned;
+      
+      // Se a coluna tiver um parentColumn, precisamos garantir que ela esteja
+      // associada ao grupo correto
+      if (column.parentColumn) {
+        // Encontramos o grupo pai
+        const parentGroup = this.content.parentColumns.find(
+          parent => parent.label === column.parentColumn
+        );
+        
+        if (parentGroup) {
+          // Garantimos que a coluna pertence ao grupo correto
+          // O AG Grid usa internamente uma estrutura de grupos
+          // Aqui apenas garantimos que o estado da coluna está correto
+          stateColumn.flex = column.widthAlgo === "flex" ? column.flex ?? 1 : null;
+          stateColumn.width = !column.width || column.width === "auto" 
+            ? null 
+            : wwLib.wwUtils.getLengthUnit(column.width)?.[0];
+        }
+      }
+    }
+  });
+  
+  // Aplicamos o estado atualizado das colunas
+  this.columnApi.applyColumnState({ state: columnState });
+},
     updateColumnsVisibility() {
   if (!this.gridApi?.value) return;
   
@@ -651,23 +732,44 @@ const updateDisplayedData = () => {
     },
     deep: true
   },
-    'content.columns': {
+  // No watch section do componente
+'content.columns': {
   handler(newColumns, oldColumns) {
-    // Verificamos se houve mudança nas propriedades de display
-    const displayChanged = newColumns.some((newCol, index) => {
-      const oldCol = oldColumns[index];
-      return oldCol && newCol.display !== oldCol.display;
-    });
+    // Verificamos se houve mudança nas propriedades das colunas
+    const columnsChanged = JSON.stringify(newColumns) !== JSON.stringify(oldColumns);
     
-    // Se mudou a visibilidade de alguma coluna, atualizamos
-    if (displayChanged && this.gridApi?.value) {
+    // Se as colunas foram alteradas e temos acesso à API da grade
+    if (columnsChanged && this.gridApi?.value) {
       this.$nextTick(() => {
+        // Primeiro atualizamos a visibilidade das colunas
         this.updateColumnsVisibility();
+        
+        // Depois atualizamos o estado completo das colunas 
+        // (para garantir parent columns, ordenação, etc.)
+        this.refreshColumnState();
+        
+        // Finalmente, atualizamos os dados exibidos
+        this.updateDisplayedData();
       });
     }
   },
   deep: true
 },
+    // Adicionamos um watcher específico para parentColumns
+'content.parentColumns': {
+  handler() {
+    // Se temos acesso à API da grade
+    if (this.gridApi?.value) {
+      this.$nextTick(() => {
+        // Para mudanças em parentColumns, precisamos forçar uma atualização completa
+        // da estrutura de colunas, o que é mais facilmente feito recarregando a grade
+        this.gridApi.value.setColumnDefs(this.columnDefs);
+        this.refreshColumnState();
+      });
+    }
+  },
+  deep: true
+}
   },
   /* wwEditor:end */
 };
