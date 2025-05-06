@@ -77,34 +77,35 @@ export default {
       });
 
     const onGridReady = (params) => {
-      // Armazenar referência para a API da grade corretamente
+      // Armazenamos a referência para a API da grade
       gridApi.value = params.api;
-      const columnApi = params.columnApi;
 
-      // Adicionar listeners para eventos usando a referência correta
-      gridApi.value.addEventListener('sortChanged', updateDisplayedData);
-      gridApi.value.addEventListener('filterChanged', updateDisplayedData);
-      gridApi.value.addEventListener('paginationChanged', updateDisplayedData);
+      // Adicionar listeners para eventos usando a função direta
+      const updateDisplayedDataFn = () => {
+        updateDisplayedData();
+      };
 
-      // Resto da configuração
+      params.api.addEventListener('sortChanged', updateDisplayedDataFn);
+      params.api.addEventListener('filterChanged', updateDisplayedDataFn);
+      params.api.addEventListener('paginationChanged', updateDisplayedDataFn);
+
+      // Garantir que as configurações de grupo funcionem corretamente
       if (props.content.parentColumns && props.content.parentColumns.length > 0) {
-        // Configurações para colunas com parentColumns
-        gridApi.value.setSuppressRowDrag(false);
+        // Habilitamos explicitamente recursos importantes
+        params.api.setSuppressRowDrag(false);
+        params.columnApi.setColumnsResizable(props.content.resizableColumns);
+        params.api.setSuppressMovableColumns(!props.content.movableColumns);
 
-        if (props.content.movableColumns) {
-          gridApi.value.setSuppressMovableColumns(false);
-        }
-
-        if (props.content.resizableColumns) {
-          columnApi.setColumnsResizable(true);
-        }
+        // Configuração crítica para garantir que os eventos funcionem
+        params.api.refreshHeader();
       }
 
-      // Garantir que as funções estejam disponíveis e sejam chamadas na ordem correta
+      // Aplica a configuração das colunas e atualiza os dados
       updateColumnsVisibility();
       refreshColumnState();
       updateDisplayedData();
 
+      // Ajustar o tamanho após um pequeno delay para garantir renderização completa
       if (props.content.autoSizeColumns) {
         sizeColumnsToFit();
       }
@@ -112,7 +113,6 @@ export default {
 
     const updateDisplayedData = () => {
       if (!gridApi.value) {
-        console.warn('updateDisplayedData: gridApi is not available');
         return;
       }
 
@@ -143,9 +143,7 @@ export default {
 
         // Atualizar a variável
         setDataTable(displayedData);
-        console.log('Data table updated with', displayedData.length, 'rows');
       } catch (error) {
-        console.error('Error in updateDisplayedData:', error);
       }
     };
 
@@ -163,11 +161,8 @@ export default {
           // Aplique autoSize nas colunas visíveis
           gridApi.value.autoSizeColumns(allColumnIds, false);
 
-          // Registre que a operação foi concluída
-          console.log('Columns auto-sized:', allColumnIds);
         }
       } catch (error) {
-        console.error('Error in sizeColumnsToFit:', error);
       }
     };
 
@@ -400,46 +395,34 @@ export default {
         }
       });
 
-      // Agora organizamos as colunas em grupos se existirem parentColumns
       if (this.content.parentColumns && this.content.parentColumns.length > 0) {
-        // Filtra para separar colunas com e sem pais
-        const columnsWithoutParent = [];
-        const columnsByParent = new Map();
-
-        // Agrupa as colunas por parentColumn
-        for (const col of processedColumns) {
-          const parentColumn = col.parentColumn;
-
-          if (!parentColumn) {
-            columnsWithoutParent.push(col);
-            // Removemos a propriedade parentColumn que não é reconhecida pelo ag-grid
-            delete col.parentColumn;
-          } else {
-            if (!columnsByParent.has(parentColumn)) {
-              columnsByParent.set(parentColumn, []);
-            }
-            // Removemos a propriedade parentColumn que não é reconhecida pelo ag-grid
-            delete col.parentColumn;
-            columnsByParent.get(parentColumn).push(col);
-          }
-        }
-
         // Cria os grupos de colunas na ordem definida pelos parentColumns
         const columnGroups = [];
 
-        this.content.parentColumns.forEach((parent) => {
+        this.content.parentColumns.forEach(parent => {
           if (columnsByParent.has(parent.label)) {
+            const children = columnsByParent.get(parent.label);
+            // Garantimos que cada coluna filha tenha suas propriedades de ordenação e filtragem
+            children.forEach(child => {
+              // Preservamos explicitamente estas propriedades que estavam sendo perdidas
+              child.sortable = child.sortable !== false;
+              child.filter = child.filter !== false;
+              child.resizable = this.content.resizableColumns;
+            });
+
             columnGroups.push({
               headerName: parent.label,
-              children: columnsByParent.get(parent.label),
+              children: children,
               // Propriedades importantes para grupos
-              marryChildren: true,
-              // Adicionamos um identificador único e estável para o grupo
+              marryChildren: false, // Mudança crítica para permitir operações individuais nas colunas filhas
               groupId: `group_${parent.label}`,
-              // Garantimos que as propriedades de cada grupo são explícitas
+              // Configurações explícitas para o grupo
               sortable: true,
               resizable: this.content.resizableColumns,
               suppressMovable: !this.content.movableColumns,
+              // Propriedades adicionais para garantir funcionalidades em colunas agrupadas
+              openByDefault: true,
+              enableRowGroup: true
             });
           }
         });
@@ -553,49 +536,56 @@ export default {
         },
       });
     },
-    // Nova função para atualizar o estado das colunas
     refreshColumnState() {
-      if (!this.gridApi || !this.columnApi) return;
+      if (!this.gridApi?.value && !this.gridApi) return;
 
-      // Obtemos o estado atual das colunas
-      const columnState = this.columnApi.getColumnState();
+      const api = this.gridApi?.value || this.gridApi;
+      const columnApi = this.columnApi?.value || this.columnApi;
 
-      // Para cada coluna definida no conteúdo, atualizamos suas propriedades
-      this.content.columns.forEach((column) => {
-        // Encontramos a coluna correspondente no estado
-        const stateColumn = columnState.find(
-          (state) => state.colId === column.field
-        );
-        if (stateColumn) {
-          // Atualizamos as propriedades da coluna
-          stateColumn.hide = column.display === false;
-          stateColumn.pinned = column.pinned === "none" ? null : column.pinned;
+      if (!api || !columnApi) return;
 
-          // Se a coluna tiver um parentColumn, precisamos garantir que ela esteja
-          // associada ao grupo correto
-          if (column.parentColumn) {
-            // Encontramos o grupo pai
-            const parentGroup = this.content.parentColumns.find(
-              (parent) => parent.label === column.parentColumn
-            );
+      try {
+        // Obtemos o estado atual das colunas
+        const columnState = columnApi.getColumnState();
 
-            if (parentGroup) {
-              // Garantimos que a coluna pertence ao grupo correto
-              // O AG Grid usa internamente uma estrutura de grupos
-              // Aqui apenas garantimos que o estado da coluna está correto
-              stateColumn.flex =
-                column.widthAlgo === "flex" ? column.flex ?? 1 : null;
-              stateColumn.width =
-                !column.width || column.width === "auto"
-                  ? null
-                  : wwLib.wwUtils.getLengthUnit(column.width)?.[0];
+        // Para cada coluna definida no conteúdo
+        this.content.columns.forEach(column => {
+          // Encontramos a coluna correspondente no estado
+          const stateColumn = columnState.find(state => state.colId === column.field);
+          if (stateColumn) {
+            // Atualizamos propriedades básicas
+            stateColumn.hide = column.display === false;
+            stateColumn.pinned = column.pinned === "none" ? null : column.pinned;
+
+            // Garantimos que as propriedades essenciais para funcionalidades são mantidas
+            stateColumn.sort = stateColumn.sort; // Preserva ordenação
+
+            // Se a coluna tiver um parentColumn
+            if (column.parentColumn) {
+              // Mantemos propriedades específicas para colunas em grupos
+              stateColumn.flex = column.widthAlgo === "flex" ? column.flex ?? 1 : null;
+              stateColumn.width = !column.width || column.width === "auto"
+                ? null
+                : wwLib.wwUtils.getLengthUnit(column.width)?.[0];
             }
           }
-        }
-      });
+        });
 
-      // Aplicamos o estado atualizado das colunas
-      this.columnApi.applyColumnState({ state: columnState });
+        // Aplicamos o estado atualizado das colunas
+        columnApi.applyColumnState({
+          state: columnState,
+          defaultState: {
+            sort: null,
+            filter: null,
+            pinned: null
+          }
+        });
+
+        // Forçamos um refresh do header para garantir que os eventos funcionem
+        api.refreshHeader();
+      } catch (error) {
+        console.error("Erro ao atualizar estado das colunas:", error);
+      }
     },
     updateColumnsVisibility() {
       if (!this.gridApi?.value) return;
@@ -713,6 +703,47 @@ export default {
         this.$emit("update:content:effect", { columns: newColumns });
       },
       deep: true,
+    },
+    'wwEditorState.boundProps.columns': {
+      handler(newColumns) {
+        // Se as colunas estão sendo alteradas dinamicamente
+        this.$nextTick(() => {
+          if (this.gridApi?.value || this.gridApi) {
+            const api = this.gridApi?.value || this.gridApi;
+
+            // 1. Primeiro destrua todos os listeners
+            api.eventService.removeEventListener('sortChanged');
+            api.eventService.removeEventListener('filterChanged');
+            api.eventService.removeEventListener('paginationChanged');
+
+            // 2. Determine se as colunas têm parentColumns
+            const hasParentColumns = newColumns.some(col => col.parentColumn);
+
+            if (hasParentColumns) {
+              // 3. Recarregue completamente as definições de coluna
+              api.setColumnDefs(this.columnDefs);
+
+              // 4. Reconfigure os listeners
+              const updateDisplayedDataFn = () => {
+                this.updateDisplayedData();
+              };
+
+              api.addEventListener('sortChanged', updateDisplayedDataFn);
+              api.addEventListener('filterChanged', updateDisplayedDataFn);
+              api.addEventListener('paginationChanged', updateDisplayedDataFn);
+            }
+
+            // 5. Atualize o estado das colunas e dados
+            this.refreshColumnState();
+            this.updateDisplayedData();
+
+            // 6. Force um refresh no header e no grid
+            api.refreshHeader();
+            api.redrawRows();
+          }
+        });
+      },
+      deep: true
     },
     computedRowData: {
       handler() {
